@@ -4,10 +4,9 @@ version = "0.1.0"
 description = "Computer Vision utilities"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
-authors = [
-  { name = "Marius Neuhalfen", email = "neuhalfen.marius@gmail.com" }
-]
+license = "GPL"
+authors      = ["Marius Neuhalfen <neuhalfen.marius@gmail.com>"]
+
 dependencies = [
   "opencv-python>=4.11.0.86,<5.0.0.0",
   "numpy>=2.2.6,<3.0.0",
