@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Computer Vision utilities"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
   { name = "Marius Neuhalfen", email = "neuhalfen.marius@gmail.com" }
 ]
