@@ -1,24 +1,20 @@
 [tool.poetry]
-name = "cv-utils"
-version = "0.1.0"
+name        = "cv-utils"
+version     = "0.1.0"
 description = "Computer Vision utilities"
-readme = "README.md"
-requires-python = ">=3.11"
-license = "GPL"
-authors      = ["Marius Neuhalfen <neuhalfen.marius@gmail.com>"]
+readme      = "README.md"
+authors     = ["Marius Neuhalfen <neuhalfen.marius@gmail.com>"]
+license     = "APL"
+packages    = [{ include = "cv_utils", from = "src" }]
 
-dependencies = [
-  "opencv-python>=4.11.0.86,<5.0.0.0",
-  "numpy>=2.2.6,<3.0.0",
-  "scipy>=1.15.3,<2.0.0",
-  "pyrender>=0.1.45,<0.2.0",
-  "trimesh>=3.0.0",
-]
-
-packages = [
-  { include = "cv_utils", from = "src" }
-]
+[tool.poetry.dependencies]
+python          = ">=3.11"
+opencv-python   = ">=4.11.0.86,<5.0.0.0"
+numpy           = ">=2.2.6,<3.0.0"
+scipy           = ">=1.15.3,<2.0.0"
+pyrender        = ">=0.1.45,<0.2.0"
+trimesh         = ">=3.0.0"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires    = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
