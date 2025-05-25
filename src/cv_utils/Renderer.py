@@ -41,6 +41,7 @@ class Renderer:
 
         self.media_dirpath = r"D:\DATASETS\RENDERED\CV_utils"
         self.images_dirpath = os.path.join(self.media_dirpath, "images")
+        self.labels_dirpath = os.path.join(self.media_dirpath, "labels")
         self.videos_dirpath = os.path.join(self.media_dirpath, "videos")
 
         os.makedirs(self.images_dirpath, exist_ok=True)
@@ -105,13 +106,16 @@ class Renderer:
 
         num_points = self.traj.shape[0]
         self.image_filepaths = []
-        self.labels = np.zeros((num_points,4,4))
+        self.poses = np.zeros((num_points,4,4))
+        self.bboxs = np.zeros((num_points,4))
 
         for ix, point in enumerate(self.traj):
             pose[:3, 3] = point
-            self.labels[ix,...] = pose
 
-            img, mask = self._render_image(pose)
+            img, mask, bbox = self._render_image(pose)
+            self.poses[ix,...] = pose
+            self.bboxs[ix,...] = bbox
+
             if bg_video:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, ix)
                 ret, bg_frame = cap.read()
@@ -160,6 +164,9 @@ class Renderer:
 
         self.has_sequence = True
 
+        # 7) Write GT to COCO label file
+        self.save_to_coco()
+
     def _render_image(self, pose: np.ndarray) -> np.ndarray:
         """
         Given a new 4x4 world→camera passive pose, update camera & light,
@@ -180,7 +187,18 @@ class Renderer:
         # 3: Create a mask: valid where depth > 0 (foreground)
         mask = (depth > 0).astype(bool)
 
-        return color, mask
+        # 4: Get bounding box
+        # Find contours and get bounding box of largest object
+        mask_uint8 = (mask * 255).astype(np.uint8)
+        contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            largest_contour = max(contours, key=cv2.contourArea)
+            x, y, w, h = cv2.boundingRect(largest_contour)
+            bbox = (x, y, w, h)
+        else:
+            bbox = None
+
+        return color, mask, bbox
     
     def __del__(self):
         # Clean up OpenGL context
@@ -317,6 +335,7 @@ class Renderer:
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
         coco_json = {
             "info": None,
+            "categories": None,
             "images": None,
             "annotations": None,
             "licenses": None
@@ -329,6 +348,13 @@ class Renderer:
             "url": "https://marius-ne.github.io/",
             "date_created": current_date
         }
+        # TODO: add support for multiple objects in frame
+        coco_json["categories"] = [
+            {
+                "id": 0,
+                "name": self.object
+            }
+        ]
         coco_json["licenses"] = [
             {
                 "id": 3.0,
@@ -340,9 +366,11 @@ class Renderer:
             raise ValueError("Cannot write labels to COCO file if " \
                 "no self.images or self.labels are present.")
         
-        # Create image list
+        # Create annotations and image list
+        annotations = []
         image_dicts = []
-        for image_filepath in self.image_filepaths:
+        for (image_filepath, pose, bbox) in zip(self.image_filepaths, self.poses, self.bboxs):
+            # Image
             image_id_text, extension = os.path.splitext(os.path.basename(image_filepath))
             image_id = int(''.join(char for char in image_id_text if char.isdigit()))
             image_dict = {
@@ -353,14 +381,32 @@ class Renderer:
                 "date_captured": current_date
             }
             image_dicts.append(image_dict)
-        coco_json["images"] = image_dicts
-
-        # Create annotations
-        annotations = []
-        for (image_filepath, pose) in zip(self.image_filepaths, self.labels):
-            annotation = {}
+        
+            # Annotation
+            q = Rotation.from_matrix(pose[:3,:3]).as_quat()
+            t = pose[:3,3]
+            area = bbox[2] * bbox[3]
+            annotation = {
+                "id": image_id,
+                "image_id": image_id,
+                "image_filepath": image_filepath,
+                "q_world2cam_passive": q,
+                "t_world2cam_passive": t,
+                "bbox": bbox,
+                "area": area,
+                "categories": 0
+            }
             annotations.append(annotation)
+
+        coco_json["images"] = image_dicts
         coco_json["annotations"] = annotations
+
+        # Write COCO JSON to file
+        coco_filepath = os.path.join(self.labels_dirpath, f"{self.object}_coco.json")
+        os.makedirs(self.labels_dirpath,exist_ok=True)
+        with open(coco_filepath, "w") as f:
+            json.dump(coco_json, f, indent=4)
+        print(f"COCO annotations saved to {coco_filepath}")
     
 if __name__ == "__main__":
     #base_path_airbus = r"E:\ESA\VBN_DataSets\Data\AIRBUS_GSTP\MAN-DATA-L1"
