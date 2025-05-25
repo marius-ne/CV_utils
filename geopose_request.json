@@ -1,0 +1,26 @@
+{
+  "id": "123",
+  "timestamp": 1680000000000,
+  "type": "geopose",
+  "sensors": [
+    {
+      "id": "sensor1",
+      "type": "camera",
+      "name": "Camera 1",
+      "model": null,
+      "rigIdentifier": null,
+      "rigRotation": null,
+      "rigTranslation": null
+    }
+  ],
+  "sensorReadings": {
+    "cameraReadings": null,
+    "geolocationReadings": null,
+    "wiFiReadings": null,
+    "bluetoothReadings": null,
+    "accelerometerReadings": null,
+    "gyroscopeReadings": null,
+    "magnetometerReadings": null
+  },
+  "priorPoses": null
+}

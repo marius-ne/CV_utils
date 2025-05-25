@@ -598,4 +598,4 @@ if __name__ == "__main__":
 
     bg_video_path = r"D:\DATASETS\RENDERED\CV_utils\bg_videos\forest_cinematic.mp4"
 
-    Renderer(pose1, pose2, bg_video_path, mesh_path, K)
+    Renderer(pose1, pose2, None, mesh_path, K)

@@ -9,7 +9,7 @@ packages    = [{ include = "cv_utils", from = "src" }]
 
 [tool.poetry.dependencies]
 python          = ">=3.11"
-opencv-python   = ">=4.11.0.86,<5.0.0.0"
+opencv-python   = "<=4.10.0.84"
 numpy           = ">=2.2.6,<3.0.0"
 scipy           = ">=1.15.3,<2.0.0"
 pyrender        = ">=0.1.45,<0.2.0"
