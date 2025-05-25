@@ -2,7 +2,8 @@ __version__ = "0.1.0"
 
 
 # Add here what user is going to be able to import "from package import ..."
-from .cv_utils import render_depth_map, invert_pose
+from .core import render_depth_map, invert_pose
+
 # from .utils import helper_function
 
 
