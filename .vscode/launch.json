@@ -7,7 +7,7 @@
         {
             "name": "Poetry Debugger: Current File",
             "type": "debugpy",
-            "python": "/c/Users/meneu/AppData/Local/pypoetry/Cache/virtualenvs/cv-utils-8nQL_1X6-py3.11/Scripts/python",
+            "python": "C:\\Users\\meneu\\AppData\\Local\\pypoetry\\Cache\\virtualenvs\\cv-utils-8nQL_1X6-py3.11\\Scripts\\python.exe",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"

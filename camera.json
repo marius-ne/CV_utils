@@ -1,0 +1,16 @@
+{
+    "distortionParamK1": 0.0,
+    "distortionParamK2": 0.0,
+    "distortionParamK3": 0.0,
+    "distortionParamP1": 0.0,
+    "distortionParamP2": 0.0,
+    "focalLengthX": 1500.25,
+    "focalLengthY": 1500.25,
+    "imageHeight": 1024,
+    "imageWidth": 1024,
+    "pixelHeight": 5.5e-06,
+    "pixelWidth": 5.5e-06,
+    "principalPointX": 503.70000000000005,
+    "principalPointY": 499.19000000000005,
+    "imageCoordinateOrigin": "center"
+}
