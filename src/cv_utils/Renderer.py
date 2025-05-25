@@ -17,6 +17,7 @@ from scipy.interpolate import splprep, splev
 
 # Our own imports
 from cv_utils.core import invert_pose
+import datetime
 
 
 class Renderer:
@@ -29,8 +30,11 @@ class Renderer:
                  K: np.ndarray = None):
         self.video_filepath = bg_video_filepath
         self.K = K
-        width = K[0,2] * 2
-        height = K[1,2] * 2
+        self.width = K[0,2] * 2
+        self.height = K[1,2] * 2
+
+        self.object, extension = os.path.splitext(os.path.basename(mesh_filepath))
+        self.mesh_filepath = mesh_filepath
 
         self.start_pose = start_pose
         self.end_pose = end_pose
@@ -70,8 +74,8 @@ class Renderer:
         self.light_node = self.scene.add(self.light, pose=np.eye(4))
 
         # 5) Offscreen renderer once
-        self.renderer = pyrender.OffscreenRenderer(viewport_width=width,
-                                                   viewport_height=height,
+        self.renderer = pyrender.OffscreenRenderer(viewport_width=self.width,
+                                                   viewport_height=self.height,
                                                    point_size=1.0)
         # =================================================
 
@@ -98,8 +102,15 @@ class Renderer:
             cap = cv2.VideoCapture(self.bg_video_path)
 
         # 1) Write out each frame
+
+        num_points = self.traj.shape[0]
+        self.image_filepaths = []
+        self.labels = np.zeros((num_points,4,4))
+
         for ix, point in enumerate(self.traj):
             pose[:3, 3] = point
+            self.labels[ix,...] = pose
+
             img, mask = self._render_image(pose)
             if bg_video:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, ix)
@@ -115,10 +126,10 @@ class Renderer:
                 composite[~mask_3c] = bg_frame[~mask_3c]
                 img = composite
 
-
             image_filepath = os.path.join(self.images_dirpath, f"img{ix:05d}.png")
             cv2.imwrite(image_filepath, img)
             print(f"Wrote image #{ix} at {image_filepath}.")
+            self.image_filepaths.append(image_filepath)
 
         cap.release()
 
@@ -146,6 +157,8 @@ class Renderer:
         # 6) Finalize
         writer.release()
         print(f"Video saved to {video_path}")
+
+        self.has_sequence = True
 
     def _render_image(self, pose: np.ndarray) -> np.ndarray:
         """
@@ -295,6 +308,59 @@ class Renderer:
             plotlyPlot(fig, auto_open=True, filename=r"media\plots\temp-plot.html")
 
         return traj 
+    
+    def save_to_coco(self):
+        """
+        Saves pose labels for images in coco format.
+        """
+        current_year = datetime.datetime.now().year
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        coco_json = {
+            "info": None,
+            "images": None,
+            "annotations": None,
+            "licenses": None
+        }
+        coco_json["info"] = {
+            "year": current_year,
+            "version": "1.0.0",
+            "description": f"COCO labels for rendered dataset of object {self.object}.",
+            "contributor": "Marius Neuhalfen",
+            "url": "https://marius-ne.github.io/",
+            "date_created": current_date
+        }
+        coco_json["licenses"] = [
+            {
+                "id": 3.0,
+                "name": "GPL",
+                "url": "https://www.gnu.org/licenses/gpl-3.0.en.html"
+            }
+        ]
+        if not hasattr(self,"has_sequence") or not self.has_sequence:
+            raise ValueError("Cannot write labels to COCO file if " \
+                "no self.images or self.labels are present.")
+        
+        # Create image list
+        image_dicts = []
+        for image_filepath in self.image_filepaths:
+            image_id_text, extension = os.path.splitext(os.path.basename(image_filepath))
+            image_id = int(''.join(char for char in image_id_text if char.isdigit()))
+            image_dict = {
+                "id": image_id,
+                "file_name": image_filepath,
+                "width": self.width,
+                "height": self.height,
+                "date_captured": current_date
+            }
+            image_dicts.append(image_dict)
+        coco_json["images"] = image_dicts
+
+        # Create annotations
+        annotations = []
+        for (image_filepath, pose) in zip(self.image_filepaths, self.labels):
+            annotation = {}
+            annotations.append(annotation)
+        coco_json["annotations"] = annotations
     
 if __name__ == "__main__":
     #base_path_airbus = r"E:\ESA\VBN_DataSets\Data\AIRBUS_GSTP\MAN-DATA-L1"
