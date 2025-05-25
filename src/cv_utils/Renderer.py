@@ -292,7 +292,7 @@ class Renderer:
                 ),
                 title="Random Spline Trajectory in Enclosing Sphere"
             )
-            plotlyPlot(fig, auto_open=True)
+            plotlyPlot(fig, auto_open=True, filename=r"media\plots\temp-plot.html")
 
         return traj 
     
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     #mesh_path = r"C:\Users\meneu\Documents\Projekte\PoseSampler\assets\envisat.glb"
     mesh_path = r"C:\Users\meneu\Documents\Projekte\PoseSampler\assets\fpv_drone.glb"
     #camera_filepath = os.path.join(base_path_airbus, 'metadata', 'camera.json')
-    camera_filepath = r"C:\Users\meneu\Documents\Projekte\CV_utils\camera.json"
+    camera_filepath = r"C:\Users\meneu\Documents\Projekte\CV_utils\assets\camera.json"
     with open(camera_filepath, 'r') as f:
         camera_dict = json.load(f)
     
