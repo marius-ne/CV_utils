@@ -85,8 +85,8 @@ class Renderer:
         start_point = start_pose[:3,3]
         end_point = end_pose[:3,3] 
 
-        #self.traj = self.random_spline_trajectory(start_point, end_point, plot=False)
-        self.traj = self.random_spline_trajectory_in_viewport(start_pose,plot=True)
+        self.traj = self.random_spline_trajectory(start_point, end_point, plot=True)
+        #self.traj = self.random_spline_trajectory_in_viewport(start_pose,plot=True)
 
         self.render_scene(bg_video=True)
 
