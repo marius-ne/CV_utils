@@ -16,7 +16,7 @@ from scipy.spatial.transform import Rotation
 from scipy.interpolate import splprep, splev
 
 # Our own imports
-from cv_utils.core import invert_pose
+from cv_utils.core import invert_pose, backproject
 import datetime
 
 
@@ -30,8 +30,8 @@ class Renderer:
                  K: np.ndarray = None):
         self.video_filepath = bg_video_filepath
         self.K = K
-        self.width = K[0,2] * 2
-        self.height = K[1,2] * 2
+        self.width = int(K[0,2] * 2)
+        self.height = int(K[1,2] * 2)
 
         self.object, extension = os.path.splitext(os.path.basename(mesh_filepath))
         self.mesh_filepath = mesh_filepath
@@ -85,11 +85,16 @@ class Renderer:
         start_point = start_pose[:3,3]
         end_point = end_pose[:3,3] 
 
-        self.traj = self.random_spline_trajectory(start_point, end_point, plot=False)
+        #self.traj = self.random_spline_trajectory(start_point, end_point, plot=False)
+        self.traj = self.random_spline_trajectory_in_viewport(start_pose,plot=True)
 
         self.render_scene(bg_video=True)
 
-    def render_scene(self, fps: float = 30.0, video_name: str = "out.mp4", bg_video = False):
+    def render_scene(self, 
+                     fps: float = 30.0, 
+                     video_name: str = "out.mp4", 
+                     bg_video: bool = False,
+                     draw_bbox: bool = True):
         """
         Renders video by first writing frame PNGs, then packing them into an MP4.
 
@@ -116,6 +121,7 @@ class Renderer:
             self.poses[ix,...] = pose
             self.bboxs[ix,...] = bbox
 
+            # Optionally add in BG using mask
             if bg_video:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, ix)
                 ret, bg_frame = cap.read()
@@ -130,9 +136,23 @@ class Renderer:
                 composite[~mask_3c] = bg_frame[~mask_3c]
                 img = composite
 
+            # Optionally draw the bounding box on the image
+            if draw_bbox and bbox is not None:
+                x, y, w, h = bbox
+                bbox_color = (0, 0, 255)  # Red box (BGR)
+                thickness = 10
+                bbox_color = tuple(int(c) for c in bbox_color)
+                bbox_img = img.copy()
+                cv2.rectangle(bbox_img, (x, y), (x + w, y + h), bbox_color, thickness)
+                img = bbox_img
+
             image_filepath = os.path.join(self.images_dirpath, f"img{ix:05d}.png")
-            cv2.imwrite(image_filepath, img)
-            print(f"Wrote image #{ix} at {image_filepath}.")
+            success = cv2.imwrite(image_filepath, img)
+            if not success:
+                raise RuntimeError(f"cv2.imwrite failed for {image_filepath!r}: "
+                                f"dtype={img.dtype}, shape={img.shape}")
+            else:
+                print(f"Wrote image #{ix} at {image_filepath}.")
             self.image_filepaths.append(image_filepath)
 
         cap.release()
@@ -146,6 +166,8 @@ class Renderer:
 
         # 3) Read the first frame to get size
         first_frame = cv2.imread(frame_files[0])
+        if first_frame is None:
+            raise IOError(f"Failed to reread just-written {image_filepath!r}")
         height, width = first_frame.shape[:2]
 
         # 4) Set up VideoWriter
@@ -156,6 +178,8 @@ class Renderer:
         # 5) Write each frame into the video
         for fpath in frame_files:
             frame = cv2.imread(fpath)
+            if frame is None:
+                raise IOError(f"Failed to re-read written {fpath!r}")
             writer.write(frame)
 
         # 6) Finalize
@@ -167,7 +191,7 @@ class Renderer:
         # 7) Write GT to COCO label file
         self.save_to_coco()
 
-    def _render_image(self, pose: np.ndarray) -> np.ndarray:
+    def _render_image(self, pose: np.ndarray, draw_bbox: bool = True) -> np.ndarray:
         """
         Given a new 4x4 world→camera passive pose, update camera & light,
         render, and return the color image.
@@ -182,7 +206,7 @@ class Renderer:
         self.scene.set_pose(self.light_node,  pose=cam_pose)
 
         # 2) Render
-        color, depth = self.renderer.render(self.scene)
+        color_img, depth = self.renderer.render(self.scene)
 
         # 3: Create a mask: valid where depth > 0 (foreground)
         mask = (depth > 0).astype(bool)
@@ -198,7 +222,7 @@ class Renderer:
         else:
             bbox = None
 
-        return color, mask, bbox
+        return color_img, mask, bbox
     
     def __del__(self):
         # Clean up OpenGL context
@@ -327,6 +351,140 @@ class Renderer:
 
         return traj 
     
+    def random_spline_trajectory_in_viewport(
+        self,
+        pose: np.ndarray,
+        max_len: float = 100,
+        near: float = 0.001,
+        far: float = 100,
+        fineness: int = 200,
+        num_ctrl: int = 3,
+        seed: int = None,
+        plot: bool = False
+    ) -> np.ndarray:
+        """
+        Generate a smooth random trajectory inside the camera's view frustum.
+
+        Args:
+            pose      : 4x4 cam→world transform.
+            K         : 3x3 camera intrinsics.
+            width     : Image width in px.
+            height    : Image height in px.
+            near, far : Distances for near/far planes.
+            max_len   : Max allowed distance between endpoints.
+            fineness  : Number of samples along the spline.
+            num_ctrl  : Number of random interior control points.
+            seed      : RNG seed.
+            plot      : If True, show Plotly 3D scene.
+
+        Returns:
+            traj : (fineness,3) array of world-space points.
+        """
+        if seed is not None:
+            np.random.seed(seed)
+
+        # Decompose pose and intrinsics
+        R = pose[:3, :3]
+        t = pose[:3,  3]
+        K = self.K
+        width = self.width
+        height = self.height
+
+        # 1) Compute the 8 corners of the view frustum in WORLD space
+        corners_px = np.array([[0,0],[width,0],[width,height],[0,height]])
+        
+        corners_cam = np.vstack([
+            [*backproject(u,v,near,K)] for (u,v) in corners_px
+        ] + [
+            [*backproject(u,v,far,K)]  for (u,v) in corners_px
+        ])  # shape (8,3)
+        corners_world = (R @ corners_cam.T).T + t  # (8,3)
+
+        # helper: sample 1 random point inside frustum
+        def sample_point():
+            Z = np.random.uniform(near, far)
+            u = np.random.uniform(0, width)
+            v = np.random.uniform(0, height)
+            cam_pt = backproject(u, v, Z, K)
+            return R @ cam_pt + t
+
+        # 2) Pick endpoints A,B with ||A-B|| <= max_len
+        # TODO LOL make this more efficient
+        for _ in range(1000):
+            A = sample_point()
+            B = sample_point()
+            if np.linalg.norm(A-B) <= max_len:
+                break
+        else:
+            raise RuntimeError("Couldn't sample endpoints within max_len")
+
+        # 3) Build control points (including A,B)
+        control_pts = [A] + [sample_point() for _ in range(num_ctrl)] + [B]
+        ctrl_arr = np.vstack(control_pts).T  # shape (3, K)
+
+        # 4) Fit & sample a cubic B‐spline
+        tck, _ = splprep(ctrl_arr, s=0, k=min(3, ctrl_arr.shape[1]-1))
+        u_fine = np.linspace(0, 1, fineness)
+        pts = splev(u_fine, tck)
+        traj = np.vstack(pts).T   # (fineness,3)
+
+        # 5) Optional Plotly visualization
+        if plot:
+            fig = go.Figure()
+
+            # ——— Frustum edges ———
+            # near‐plane loop
+            for i in range(4):
+                fig.add_trace(go.Scatter3d(
+                    x=[corners_world[i,0], corners_world[(i+1)%4,0]],
+                    y=[corners_world[i,1], corners_world[(i+1)%4,1]],
+                    z=[corners_world[i,2], corners_world[(i+1)%4,2]],
+                    mode='lines', line=dict(color='gray'), showlegend=False
+                ))
+            # far‐plane loop
+            for i in range(4, 8):
+                j = 4 + (i+1-4)%4
+                fig.add_trace(go.Scatter3d(
+                    x=[corners_world[i,0], corners_world[j,0]],
+                    y=[corners_world[i,1], corners_world[j,1]],
+                    z=[corners_world[i,2], corners_world[j,2]],
+                    mode='lines', line=dict(color='gray'), showlegend=False
+                ))
+            # connect near→far
+            for i in range(4):
+                fig.add_trace(go.Scatter3d(
+                    x=[corners_world[i,0], corners_world[i+4,0]],
+                    y=[corners_world[i,1], corners_world[i+4,1]],
+                    z=[corners_world[i,2], corners_world[i+4,2]],
+                    mode='lines', line=dict(color='gray'), showlegend=False
+                ))
+
+            # ——— Trajectory ———
+            fig.add_trace(go.Scatter3d(
+                x=traj[:,0], y=traj[:,1], z=traj[:,2],
+                mode='lines', line=dict(width=4, color='blue'),
+                name='Trajectory'
+            ))
+
+            # ——— Control points ———
+            cp = np.vstack(control_pts)
+            fig.add_trace(go.Scatter3d(
+                x=cp[:,0], y=cp[:,1], z=cp[:,2],
+                mode='markers', marker=dict(size=6, color='red'),
+                name='Control Points'
+            ))
+
+            fig.update_layout(
+                scene=dict(
+                    xaxis_title='X', yaxis_title='Y', zaxis_title='Z',
+                    aspectmode='data'
+                ),
+                title="Random Spline Trajectory in Camera Frustum"
+            )
+            fig.show()
+
+        return traj
+    
     def save_to_coco(self):
         """
         Saves pose labels for images in coco format.
@@ -357,7 +515,7 @@ class Renderer:
         ]
         coco_json["licenses"] = [
             {
-                "id": 3.0,
+                "id": "3.0",
                 "name": "GPL",
                 "url": "https://www.gnu.org/licenses/gpl-3.0.en.html"
             }
@@ -390,10 +548,10 @@ class Renderer:
                 "id": image_id,
                 "image_id": image_id,
                 "image_filepath": image_filepath,
-                "q_world2cam_passive": q,
-                "t_world2cam_passive": t,
-                "bbox": bbox,
-                "area": area,
+                "q_world2cam_passive": q.tolist(),
+                "t_world2cam_passive": t.tolist(),
+                "bbox": bbox.tolist(),
+                "area": float(area),
                 "categories": 0
             }
             annotations.append(annotation)
@@ -428,7 +586,7 @@ if __name__ == "__main__":
 
     R = np.eye(3)
     start_t = np.array([0, 0, 1])
-    end_t = np.array([0, 0, 20])
+    end_t = np.array([0, 0, 10])
     pose1 = np.zeros(shape=(4,4))
     pose2 = np.zeros(shape=(4,4))
     pose1[:3,:3] = R

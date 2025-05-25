@@ -101,7 +101,6 @@ def depth_estimate(
     """
     # 1) Intrinsics
     fx, fy = K[0, 0], K[1, 1]
-    cx, cy = K[0, 2], K[1, 2]
     f_mean = 0.5 * (fx + fy)
 
     # 2) Depth and its std (10% relative error)
@@ -110,9 +109,7 @@ def depth_estimate(
 
     # 3) Back‐project pixel into camera‐frame point
     x, y = center
-    X = (x - cx) * Z / fx
-    Y = (y - cy) * Z / fy
-    cam_pt = np.array([X, Y, Z])
+    cam_pt = backproject(x,y,Z,K)
 
     # 4) Recover world‐space point:
     #    world_pt satisfies R @ world_pt + t = cam_pt
@@ -123,10 +120,10 @@ def depth_estimate(
     mu_world = R.T @ (cam_pt - t)
 
     # 5) Build unit viewing‐ray in camera frame
-    ray_cam = np.array([(x - cx) / fx, (y - cy) / fy, 1.0])
-    ray_cam /= np.linalg.norm(ray_cam)
+    ray_cam = backray(x,y,K)
 
     # 6) Rotate ray into world frame (translation drops out)
+    # TODO: understand this
     ray_world = R.T @ ray_cam
     ray_world /= np.linalg.norm(ray_world)
 
@@ -178,4 +175,24 @@ def triangulate(
     euclid = (hom_pts[:3] / hom_pts[3]).reshape(3)
     return euclid
 
+def backproject(u, v, Z, K):
+    """
+    Takes in the image points and the world depth of this iamge point.
+    It returns the 3D coordinate of the corresponding world point in
+    camera coordinates.
+    """
+    fx, fy = K[0,0], K[1,1]
+    cx, cy = K[0,2], K[1,2]
+    return np.array([(u-cx)/fx*Z, (v-cy)/fy*Z, Z])
+
+def backray(u,v,K):
+    """
+    Takes in an image point and gives the normalized backprojection
+    ray of this point in the world in camera coordinates.
+    """
+    fx, fy = K[0,0], K[1,1]
+    cx, cy = K[0,2], K[1,2]
+    ray_cam = np.array([(u - cx) / fx, (v - cy) / fy, 1.0])
+    ray_cam /= np.linalg.norm(ray_cam)
+    return ray_cam
 
