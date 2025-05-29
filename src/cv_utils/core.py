@@ -196,3 +196,37 @@ def backray(u,v,K):
     ray_cam /= np.linalg.norm(ray_cam)
     return ray_cam
 
+def project_points(
+    pose: np.ndarray,
+    K: np.ndarray,
+    points_3d: np.ndarray
+) -> np.ndarray:
+    """
+    Projects 3D points in world coordinates onto the image plane using cv2.projectPoints.
+
+    Args:
+        pose: (4x4) passive world-to-camera transformation matrix.
+        K: (3x3) camera intrinsic matrix.
+        points_3d: (N, 3) array of 3D points in world coordinates.
+
+    Returns:
+        (N, 2) array of 2D projected points in image coordinates.
+    """
+    # Extract rotation and translation from pose (world-to-camera)
+    R = pose[:3, :3]
+    t = pose[:3, 3]
+
+    # cv2.projectPoints expects rotation as a Rodrigues vector and translation as (3,1)
+    rvec, _ = cv2.Rodrigues(R)
+    tvec = t.reshape(3, 1)
+
+    # Ensure points_3d is (N, 1, 3) for cv2.projectPoints
+    points_3d = np.asarray(points_3d, dtype=np.float32).reshape(-1, 1, 3)
+
+    # No distortion
+    dist_coeffs = np.zeros(5)
+
+    img_points, _ = cv2.projectPoints(points_3d, rvec, tvec, K, dist_coeffs)
+    img_points = img_points.reshape(-1, 2)
+    return img_points
+
