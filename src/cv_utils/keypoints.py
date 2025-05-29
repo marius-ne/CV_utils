@@ -54,6 +54,23 @@ def select_farthest_keypoints_from_obj(obj_path, num_keypoints=10):
     print(f"Selected {num_keypoints} farthest-distributed keypoints.")
     return keypoints
 
+def add_visibility_to_keypoints(keypoints_2d, image_size):
+    """
+    Adds a third column to 2D keypoints indicating if each keypoint is inside the image frame.
+
+    Parameters:
+        keypoints_2d (np.ndarray): (N, 2) array of 2D keypoint coordinates (x, y).
+        image_size (tuple): (width, height) of the image.
+
+    Returns:
+        np.ndarray: (N, 3) array where the third column is 1 if inside frame, 0 otherwise.
+    """
+    width, height = image_size
+    x_in = (keypoints_2d[:, 0] >= 0) & (keypoints_2d[:, 0] < width)
+    y_in = (keypoints_2d[:, 1] >= 0) & (keypoints_2d[:, 1] < height)
+    in_frame = (x_in & y_in).astype(int)
+    return np.hstack([keypoints_2d, in_frame[:, None]])
+
 if __name__ == "__main__":
     obj_file = r"E:\ESA\VBN_DataSets\Data\SHIRT\models\TangoV12.obj" 
     N = 10  # Number of keypoints to select
@@ -69,3 +86,5 @@ if __name__ == "__main__":
     with open(output_path, "w") as f:
         json.dump(keypoints_list, f, indent=2)
     print(f"Keypoints saved to {output_path}")
+
+
