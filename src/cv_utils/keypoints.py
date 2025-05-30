@@ -2,6 +2,7 @@ import trimesh
 import numpy as np
 import json
 import os
+import cv2
 
 def farthest_point_sampling(vertices, num_samples):
     """
@@ -70,6 +71,38 @@ def add_visibility_to_keypoints(keypoints_2d, image_size):
     y_in = (keypoints_2d[:, 1] >= 0) & (keypoints_2d[:, 1] < height)
     in_frame = (x_in & y_in).astype(int)
     return np.hstack([keypoints_2d, in_frame[:, None]])
+
+def draw_kps_on_img(img,points2D):
+    """
+    Draws keypoints onto image including numbered labels.
+
+    Drawing is done INPLACE! So directly supply output image.
+
+    Args:
+        points2D (np.ndarray): Either keypoints with or without visibility 
+            with shape [N,2] or [N,3].
+    """
+    # If the last dimension is 2 then we add visibility
+    if points2D.shape[-1] == 2:
+        h,w = img.shape[:2]
+        points2D = keypoints.add_visibility_to_keypoints(points2D,(w,h))
+        
+    for idx, kp in enumerate(points2D):
+        x, y, visible = kp[:3]
+        if visible:
+            # Draw a larger, slightly darker magenta circle
+            cv2.circle(img, (int(x), int(y)), 12, (180, 0, 180), -1)
+            # Put the label centered within the circle
+            text = str(idx)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.7
+            thickness = 2
+            text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
+            text_x = int(x) - text_size[0] // 2
+            text_y = int(y) + text_size[1] // 2
+            cv2.putText(img, text, (text_x, text_y), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    return img
+
 
 if __name__ == "__main__":
     obj_file = r"E:\ESA\VBN_DataSets\Data\SHIRT\models\TangoV12.obj" 
