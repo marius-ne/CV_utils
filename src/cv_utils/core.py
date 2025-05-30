@@ -196,6 +196,15 @@ def backray(u,v,K):
     ray_cam /= np.linalg.norm(ray_cam)
     return ray_cam
 
+def angle_between_vectors(v1, v2):
+    """
+    Compute angle between two 3D vectors in radians.
+    """
+    v1 = v1 / np.linalg.norm(v1)
+    v2 = v2 / np.linalg.norm(v2)
+    dot_product = np.clip(np.dot(v1, v2), -1.0, 1.0)
+    return np.arccos(dot_product)
+
 def project_points(
     pose: np.ndarray,
     K: np.ndarray,
