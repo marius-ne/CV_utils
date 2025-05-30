@@ -132,6 +132,25 @@ def depth_estimate(
 
     return mu_world, sigma_world
 
+def rotation_angle_between_matrices(R1, R2):
+    """
+    Computes the angle (in radians) between two rotation matrices.
+
+    Args:
+        R1 (np.ndarray): 3x3 rotation matrix.
+        R2 (np.ndarray): 3x3 rotation matrix.
+
+    Returns:
+        float: rotation angle in radians.
+    """
+    R = R1.T @ R2
+    trace = np.trace(R)
+    cos_theta = (trace - 1) / 2.0
+    # Clip to avoid numerical issues with arccos
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    theta = np.arccos(cos_theta)
+    return theta
+
 def triangulate(
     pt1: Sequence[float],
     pt2: Sequence[float],
