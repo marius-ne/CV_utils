@@ -1,5 +1,5 @@
 [tool.poetry]
-name        = "cv-utils"
+name        = "cv-utils-mariusn"
 version     = "0.1.0"
 description = "Computer Vision utilities"
 readme      = "README.md"
