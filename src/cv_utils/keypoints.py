@@ -125,6 +125,9 @@ def add_visibility_to_keypoints(keypoints_2d, image_size):
     """
     Adds a third column to 2D keypoints indicating if each keypoint is inside the image frame.
 
+    We use COCO visibility by default, so in-frame by default is 2.
+    For real occlusion management, use add_coco_visibility_to_keypoints()
+
     Parameters:
         keypoints_2d (np.ndarray): (N, 2) array of 2D keypoint coordinates (x, y).
         image_size (tuple): (width, height) of the image.
@@ -135,7 +138,7 @@ def add_visibility_to_keypoints(keypoints_2d, image_size):
     width, height = image_size
     x_in = (keypoints_2d[:, 0] >= 0) & (keypoints_2d[:, 0] < width)
     y_in = (keypoints_2d[:, 1] >= 0) & (keypoints_2d[:, 1] < height)
-    in_frame = (x_in & y_in).astype(int)
+    in_frame = (x_in & y_in).astype(int)*2
     return np.hstack([keypoints_2d, in_frame[:, None]])
 
 def add_coco_visibility_to_keypoints(
