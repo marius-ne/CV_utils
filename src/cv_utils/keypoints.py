@@ -139,12 +139,12 @@ def add_visibility_to_keypoints(keypoints_2d, image_size):
     return np.hstack([keypoints_2d, in_frame[:, None]])
 
 def add_coco_visibility_to_keypoints(
-    keypoints_2d: np.ndarray,
-    keypoints_3d: np.ndarray,
-    depth_map: np.ndarray,
-    image_size: tuple,
-    occlusion_tol: float = 0.05
-) -> np.ndarray:
+        keypoints_2d: np.ndarray,
+        keypoints_3d: np.ndarray,
+        depth_map: np.ndarray,
+        image_size: tuple,
+        occlusion_tol: float = 0.05
+    ) -> np.ndarray:
     """
     Adds a third column to 2D keypoints indicating visibility according to COCO convention:
       - 2 = visible
@@ -213,7 +213,50 @@ def add_coco_visibility_to_keypoints(
             visibilities[i] = 1  # occluded
 
     # Stack to (N, 3): [x, y, v]
-    return np.concatenate([keypoints_2d, visibilities[:, None]], axis=1)    
+    return np.concatenate([keypoints_2d, visibilities[:, None]], axis=1) 
+
+def keypoints_to_bbox(keypoints: np.ndarray, compute_area = True) -> tuple:
+    """
+    Given an array of 2D keypoints of shape (N, 2), compute the bounding box
+    that encloses all points. Returns (x, y, width, height, (area)), where
+      x, y       = minimum coordinates among keypoints,
+      width      = max_x - min_x,
+      height     = max_y - min_y.
+      area       = height * width.
+
+    If keypoints is empty, returns (0.0, 0.0, 0.0, 0.0).
+
+    Parameters:
+        keypoints (np.ndarray): An (N, 2) array of (x, y) coordinates.
+        compute_area (bool): Whether or not to compute and return area of the bbox also.
+
+    Returns:
+        (float, float, float, float, (float)): (x, y, width, height, (area))
+    """
+    if keypoints.size == 0:
+        return 0.0, 0.0, 0.0, 0.0
+
+    # Ensure shape is (N, 2)
+    kp = np.asarray(keypoints, dtype=np.float32)
+    if kp.ndim != 2 or kp.shape[1] != 2:
+        raise ValueError(f"Expected keypoints of shape (N, 2), got {kp.shape}")
+
+    xs = kp[:, 0]
+    ys = kp[:, 1]
+
+    min_x = float(np.min(xs))
+    min_y = float(np.min(ys))
+    max_x = float(np.max(xs))
+    max_y = float(np.max(ys))
+
+    width = max_x - min_x
+    height = max_y - min_y
+
+    if compute_area:
+        area = width*height
+        return min_x, min_y, width, height, area
+    else:
+        return min_x, min_y, width, height
 
 def draw_kps_on_img(img,points2D):
     """
